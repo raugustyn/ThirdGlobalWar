@@ -1,0 +1,148 @@
+import LineString from 'ol/geom/LineString'
+import Polygon from 'ol/geom/Polygon'
+import { Feature } from 'ol'
+import { Vector as VectorSource } from 'ol/source'
+import {Circle as CircleStyle, Fill, Stroke, Style} from 'ol/style';
+
+const image = new CircleStyle({
+    radius: 5,
+    fill: null,
+    stroke: new Stroke({color: 'green', width: 3})
+});
+  
+const styles = {
+    'Point': new Style({
+      image: image,
+    }),
+    'LineString': new Style({
+      stroke: new Stroke({
+        color: 'green',
+        width: 3,
+      }),
+    }),
+    'MultiLineString': new Style({
+      stroke: new Stroke({
+        color: 'green',
+        width: 1,
+      }),
+    }),
+    'MultiPoint': new Style({
+      image: image,
+    }),
+    'MultiPolygon': new Style({
+      stroke: new Stroke({
+        color: 'yellow',
+        width: 1,
+      }),
+      fill: new Fill({
+        color: 'rgba(255, 255, 0, 0.1)',
+      }),
+    }),
+    'Polygon': new Style({
+      stroke: new Stroke({
+        color: 'blue',
+        //lineDash: [4],
+        width: 1,
+      }),
+      fill: new Fill({
+        color: 'rgba(0, 0, 255, 0.1)',
+      }),
+    }),
+    'GeometryCollection': new Style({
+      stroke: new Stroke({
+        color: 'magenta',
+        width: 2,
+      }),
+      fill: new Fill({
+        color: 'magenta',
+      }),
+      image: new CircleStyle({
+        radius: 10,
+        fill: null,
+        stroke: new Stroke({
+          color: 'magenta',
+        }),
+      }),
+    }),
+    'Circle': new Style({
+      stroke: new Stroke({
+        color: 'green',
+        width: 2,
+      }),
+      fill: new Fill({
+        color: 'rgba(255,255,0,0.2)',
+      }),
+    })
+  };
+  
+  const styleFunction = function (feature) {
+    return styles[feature.getGeometry().getType()];
+  };
+  
+class ExpandingProcess {
+
+    constructor () {
+        this.endLine = new LineString([[4201651.73266473412513733, 6261171.03453193325549364],[4191552.61396243795752525, 6252950.05944487173110247],[4188724.14980332879349589, 6246082.21541058085858822],[4184258.15376263065263629, 6234436.66662830673158169],[4179271.12485051667317748, 6219357.03521018661558628],[4178377.92564237583428621, 6217042.82046953029930592],[4179643.29118724074214697, 6210995.98385624401271343],[4190957.14782367832958698, 6200096.68367552198469639],[4202568.73752949666231871, 6189943.8369600111618638],[4210979.69673947896808386, 6183822.23310612607747316],[4217083.22466176655143499, 6176058.21034272760152817],[4224481.04478102643042803, 6171575.39732303190976381]])
+        this.startLine = new LineString([[4244586.31694573722779751, 6261702.78112585097551346],[4239859.8044693311676383, 6255693.45547970570623875],[4241143.77833103016018867, 6249366.84051351714879274],[4240399.44565758109092712, 6247276.62539678066968918],[4239096.86347904428839684, 6244477.22544741258025169],[4238799.1304096644744277, 6241491.19289595168083906],[4238761.91377599164843559, 6238878.409382538869977],[4237719.84803316090255976, 6236564.22577650099992752],[4237533.76486479956656694, 6235929.69091804791241884],[4237868.71456785127520561, 6235108.52774860803037882],[4238278.0975382486358285, 6234063.41031606867909431],[4237570.98149847146123648, 6231674.56764583569020033],[4236082.3161515723913908, 6229845.60731971357017756],[4235449.63337913900613785, 6227718.03832611907273531],[4235077.46704241540282965, 6226150.3539135679602623],[4235226.33357710484415293, 6224022.77950089983642101],[4233774.88486387766897678, 6222455.09109426755458117],[4231653.53674454614520073, 6219319.70919530931860209],[4230090.43813030142337084, 6215288.49392860848456621],[4229681.05515990313142538, 6212115.77031943574547768],[4229643.83852623123675585, 6207673.94558443408459425],[4230053.22149662859737873, 6204837.14282004814594984],[4231765.1866455627605319, 6198249.02019187249243259],[4232397.86941799521446228, 6192220.76835209969431162],[4231914.05318025313317776, 6187386.95070466678589582],[4233998.1846659118309617, 6175740.92967653833329678]])
+
+        const shape = this.buildShape(this.startLine, this.endLine)
+        const timeFrames = this.getIncrementShapes(6000, 6)
+        this.source = new VectorSource({ 
+            wrapX: false, 
+            features: [
+                shape,
+                ...timeFrames,
+                new Feature({ geometry:this.endLine }),
+                new Feature({ geometry:this.startLine })
+            ]
+        })
+    }
+
+    buildShape(startLine, endLine) {        
+        return new Feature({ geometry: new Polygon([...startLine.getCoordinates(), ...endLine.getCoordinates().slice().reverse()])})
+    }
+
+    segmentizeLine(line, numSegments) {
+        let coords = []
+        for (var i=0; i<=numSegments; i++) {
+            coords.push(line.getCoordinateAt(i/numSegments))
+        }
+
+        return new LineString(coords)
+    }
+
+    getIncrementShapes(segmentMaxLength, numTimeWindows) {
+        const result = []
+
+        const edges = [this.startLine, this.endLine]
+
+        // Calc numSegments 
+        let numSegments = 0
+        for (var edge of edges) {
+            const edgeNumSegments = Math.ceil(edge.getLength()/segmentMaxLength)
+            if (numSegments < edgeNumSegments) {
+                numSegments = edgeNumSegments
+            }
+        }
+
+        // Calc segments
+        const segments = edges.map((edge) => this.segmentizeLine(edge, numSegments))
+
+        // Calc time shapes
+        const startCoords = segments[0].getCoordinates()
+        const endCoords = segments[1].getCoordinates()
+        for (var timeWindow=0; timeWindow<numTimeWindows; timeWindow++) {
+            let coords = []
+            for (var vertexIndex=0; vertexIndex<startCoords.length; vertexIndex++) {
+                const vector = new LineString([startCoords[vertexIndex], endCoords[vertexIndex]])
+                coords.unshift(vector.getCoordinateAt(timeWindow/numTimeWindows))
+            }        
+            result.push(new Feature({ geometry: new Polygon([[...coords, ...this.endLine.getCoordinates()]])}))    
+        }
+
+        return result
+    }
+
+}
+
+export { ExpandingProcess, styleFunction }
